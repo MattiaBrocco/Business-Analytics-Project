@@ -1,0 +1,98 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r, echo = FALSE}
+library(ggplot2)
+library(tigerstats)
+```
+
+```{r}
+an13 <- read.csv("an13.csv")
+an13
+```
+
+
+```{r}
+##### AN13
+# sconto:  ridurre categorie
+# nuovo_abb : 44 valori
+# sesso : NA values
+# professione : drop (100% values)
+# cap : riddurre features o rimuovere?
+
+
+# tipo_pag : OK
+
+##### IN13
+# prov_museo : correggere XX
+# museo : ridurre feautures (?)
+# comune : ridurre feautures
+```
+
+
+
+
+```{r}
+colnames(an13)
+```
+
+```{r}
+ggplot(an13, aes(x = nuovo_abb)) + geom_bar(fill = "#8196D2") + theme_classic()
+```
+
+```{r}
+an13.sub <- subset(an13, nuovo_abb == "VECCHIO ABBONATO")
+nrow(an13.sub)
+```
+```{r}
+levels(as.factor(an13$comune))
+```
+
+### MERGE
+
+```{r}
+in13 <- read.csv("in13.csv")
+data1 <- read.csv("data1.csv")
+
+print("an13")
+nrow(an13); ncol(an13)
+print("-----")
+print("in13")
+nrow(in13); ncol(in13)
+print("-----")
+print("data1")
+nrow(data1); ncol(data1)
+```
+```{r}
+#colnames(an13)
+#print("-----\n")
+colnames(in13)
+#print("-----\n")
+#colnames(data1)
+```
+
+
+
+```{r}
+names(in13)[8] <- "codcliente"
+```
+
+
+```{r}
+subtotal <- merge(an13, in13, by="codcliente")
+ncol(subtotal); nrow(subtotal)
+```
+
+```{r}
+total <- merge(subtotal, data1, by = "codcliente")
+ncol(total); nrow(total)
+```
+
+```{r}
+total
+```
+
+
+
