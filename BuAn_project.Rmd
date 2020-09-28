@@ -10,7 +10,9 @@ library(ggplot2)
 library(tigerstats)
 ```
 
+
 # Import Data and Exploratory Data Analysis
+
 
 ```{r}
 an13 <- read.csv("an13.csv")
@@ -36,6 +38,8 @@ ncol(an13); nrow(an13)
 # tipo_pag: OK
 
 ```
+
+
 
 ```{r, warning = FALSE}
 # Age density plot broken down by sex
@@ -66,7 +70,6 @@ an13$tipo_pag <- as.factor(an13$tipo_pag)
 
 
 
-
 ```{r}
 in13 <- read.csv("in13.csv")
 head(in13)
@@ -87,9 +90,12 @@ ncol(in13); nrow(in13)
 ```
 
 
+
 ```{r}
 ggplot(in13, aes(x = prov_museo)) + geom_bar(fill = "#8196D2") + theme_classic()
 ```
+
+
 
 ```{r}
 affluence.h <- data.frame("hours.num" = as.character(seq(0,23)),
@@ -151,6 +157,7 @@ ncol(data1); nrow(data1)
 ```
 
 
+
 ```{r}
 ggplot(data1, aes(x = si2014)) + geom_bar(fill = "#8196D2") + theme_classic()
 ```
@@ -173,11 +180,9 @@ ncol(sub.df); nrow(sub.df)
 ```
 
 
+
 ```{r}
 df <- merge(sub.df, data1, by = "codcliente")
 head(df)
 ncol(df); nrow(df)
 ```
-
-
-
