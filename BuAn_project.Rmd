@@ -1,97 +1,182 @@
 ---
-title: "R Notebook"
-output: html_notebook
+title: "ParkingU Group Work"
+output:
+  html_document:
+    df_print: paged
 ---
 
-```{r, echo = FALSE}
+```{r, message=FALSE}
 library(ggplot2)
 library(tigerstats)
 ```
 
+# Import Data and Exploratory Data Analysis
+
 ```{r}
 an13 <- read.csv("an13.csv")
-an13
+head(an13)
+ncol(an13); nrow(an13)
+
+
+##### Initial considerations:
+# X: DROP
+# professione : DROP (100% NA values)
+
+# data_inizio: WORK ON IT (e.g. assign a number 1<x<365)
+# sconto:  rendere factor + ridurre categorie (con criterio)
+# riduzione:  factor + ridurre categorie (con criterio)
+# agenzia: ???? factor + ridurre categorie (con criterio) OPPURE drop (dipende quanto è importante)
+# agenzia_tipo: ???? factor + ridurre categorie (con criterio) OPPURE drop (dipende quanto è importante)
+# sesso : deal with NA values (3% del totale)
+# comune & cap: ???? factor + ridurre categorie (con criterio) OPPURE drop (dipende quanto è importante)
+# nuovo_abb : 44 valori (?)
+
+# importo: OK
+# data_nascita: OK
+# tipo_pag: OK
+
+```
+
+```{r, warning = FALSE}
+# Age density plot broken down by sex
+densityplot(~as.numeric(data_nascita), data = an13, groups = sesso,
+            plot.point = FALSE, lwd = 3, na.rm = TRUE,
+            main = "Age density plot broken down by sex", auto.key = TRUE)
+
+# Age density broken down by Payment method
+densityplot(~as.numeric(data_nascita)|tipo_pag, data = an13,
+            layout = c(2,3), plot.point = FALSE, lwd = 2, col = "#8196D2",
+            main = "Age density broken down by Payment method")
 ```
 
 
+
 ```{r}
-##### AN13
-# sconto:  ridurre categorie
-# nuovo_abb : 44 valori
-# sesso : NA values
-# professione : drop (100% values)
-# cap : riddurre features o rimuovere?
+# check how many NA values per each column
+sapply(an13, function(x) sum(is.na(x)))
+
+# drop the column "professione" since it has 100% NA values
+# drop the column "X" since it is the repetition of index (it happens sometimes when scraping/importing data)
+an13 <- subset(an13, select = -c(professione, X) )
+
+# change type of the following columns (they both were columns made of string values)
+an13$data_nascita <- as.numeric(an13$data_nascita)
+an13$tipo_pag <- as.factor(an13$tipo_pag)
+```
 
 
-# tipo_pag : OK
+
+
+```{r}
+in13 <- read.csv("in13.csv")
+head(in13)
+ncol(in13); nrow(in13)
+
 
 ##### IN13
-# prov_museo : correggere XX
-# museo : ridurre feautures (?)
-# comune : ridurre feautures
+# X: DROP
+
+# datai: WORK ON IT (e.g. assign a number 1<x<365)
+# orai: WORK ON IT (does it work in the form hh:mm in the model? otherwise seconds count from 00:00)
+# museo : ????? factor + ridurre categorie OPPURE drop (quanto è importante?)
+# prov_museo : correggere XX and ????? factor + ridurre categorie OPPURE drop (quanto è importante?)
+# com_museo: ????? factor + ridurre categorie OPPURE drop (quanto è importante?)
+
+# CodCliente: OK
+# importo: OK
 ```
 
+
+```{r}
+ggplot(in13, aes(x = prov_museo)) + geom_bar(fill = "#8196D2") + theme_classic()
+```
+
+```{r}
+affluence.h <- data.frame("hours.num" = as.character(seq(0,23)),
+                          "hours.affluence" = c(
+                            nrow(subset(in13, grepl("00:", in13$orai) == TRUE)),
+                            nrow(subset(in13, grepl("01:", in13$orai) == TRUE)),
+                            nrow(subset(in13, grepl("02:", in13$orai) == TRUE)),
+                            nrow(subset(in13, grepl("03:", in13$orai) == TRUE)),
+                            nrow(subset(in13, grepl("04:", in13$orai) == TRUE)),
+                            nrow(subset(in13, grepl("05:", in13$orai) == TRUE)),
+                            nrow(subset(in13, grepl("06:", in13$orai) == TRUE)),
+                            nrow(subset(in13, grepl("07:", in13$orai) == TRUE)),
+                            nrow(subset(in13, grepl("08:", in13$orai) == TRUE)),
+                            nrow(subset(in13, grepl("09:", in13$orai) == TRUE)),
+                            nrow(subset(in13, grepl("10:", in13$orai) == TRUE)),
+                            nrow(subset(in13, grepl("11:", in13$orai) == TRUE)),
+                            nrow(subset(in13, grepl("12:", in13$orai) == TRUE)),
+                            nrow(subset(in13, grepl("13:", in13$orai) == TRUE)),
+                            nrow(subset(in13, grepl("14:", in13$orai) == TRUE)),
+                            nrow(subset(in13, grepl("15:", in13$orai) == TRUE)),
+                            nrow(subset(in13, grepl("16:", in13$orai) == TRUE)),
+                            nrow(subset(in13, grepl("17:", in13$orai) == TRUE)),
+                            nrow(subset(in13, grepl("18:", in13$orai) == TRUE)),
+                            nrow(subset(in13, grepl("19:", in13$orai) == TRUE)),
+                            nrow(subset(in13, grepl("20:", in13$orai) == TRUE)),
+                            nrow(subset(in13, grepl("21:", in13$orai) == TRUE)),
+                            nrow(subset(in13, grepl("22:", in13$orai) == TRUE)),
+                            nrow(subset(in13, grepl("23:", in13$orai) == TRUE)) ))
+
+barplot(affluence.h$hours.affluence, col = "#8196D2",
+        main = "Affluence by Hour", names.arg = affluence.h$hours.num)
+```
 
 
 
 ```{r}
-colnames(an13)
+# check how many NA values per each column
+sapply(in13, function(x) sum(is.na(x)))
+
+in13 <- subset(in13, select = -c(X) )
+
+# rename the column "CodCliente" so that can be used as key in the merge
+names(in13)[7] <- "codcliente"
 ```
 
-```{r}
-ggplot(an13, aes(x = nuovo_abb)) + geom_bar(fill = "#8196D2") + theme_classic()
-```
+
 
 ```{r}
-an13.sub <- subset(an13, nuovo_abb == "VECCHIO ABBONATO")
-nrow(an13.sub)
+data1 <- read.csv("data1.csv")
+head(data1)
+ncol(data1); nrow(data1)
+
+
+# X: DROP
+# si2014: TARGET VARIABLE
+# ultimo_ing: WORK ON IT (e.g. 1<x<365). RMK: There are NA (10% of values)
+# abb_13: check importance + WORK ON IT (e.g. 1<x<365)
+# abb_14: check importance + WORK ON IT (e.g. 1<x<365) RMK: NA almost always if "si2014" == 0 (30% of values)
 ```
+
+
 ```{r}
-levels(as.factor(an13$comune))
+ggplot(data1, aes(x = si2014)) + geom_bar(fill = "#8196D2") + theme_classic()
 ```
+
+
+
+```{r}
+# check how many NA values per each column
+sapply(data1, function(x) sum(is.na(x)))
+
+data1 <- subset(data1, select = -c(X) )
+```
+
 
 ### MERGE
 
 ```{r}
-in13 <- read.csv("in13.csv")
-data1 <- read.csv("data1.csv")
-
-print("an13")
-nrow(an13); ncol(an13)
-print("-----")
-print("in13")
-nrow(in13); ncol(in13)
-print("-----")
-print("data1")
-nrow(data1); ncol(data1)
-```
-```{r}
-#colnames(an13)
-#print("-----\n")
-colnames(in13)
-#print("-----\n")
-#colnames(data1)
-```
-
-
-
-```{r}
-names(in13)[8] <- "codcliente"
+sub.df <- merge(an13, in13, by="codcliente")
+ncol(sub.df); nrow(sub.df)
 ```
 
 
 ```{r}
-subtotal <- merge(an13, in13, by="codcliente")
-ncol(subtotal); nrow(subtotal)
-```
-
-```{r}
-total <- merge(subtotal, data1, by = "codcliente")
-ncol(total); nrow(total)
-```
-
-```{r}
-total
+df <- merge(sub.df, data1, by = "codcliente")
+head(df)
+ncol(df); nrow(df)
 ```
 
 
