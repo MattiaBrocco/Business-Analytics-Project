@@ -1,0 +1,349 @@
+---
+title: "Models Business Analytics"
+output: html_notebook
+Author: Brocco Mattia, Cabrele Sofia, Piccolo Giulio
+Date: 25/10/2020
+---
+
+```{r, message = FALSE, echo = FALSE}
+library(DMwR)
+library(plyr)
+library(ROCR)
+library(caret)
+library(dplyr)
+library(ggplot2)
+library(viridis)
+library(reshape2)
+library(imbalance)
+library(tidyverse)
+```
+
+
+# 1. Load the file and fix the import
+```{r message = FALSE, warning = FALSE}
+df <- read_csv("C:/Users/matti/Desktop/BA Year 3/1. Business analytics/4. Project/customer_data.csv")
+df <- as.data.frame(df)
+df <- subset(df, select = -c(X1, codcliente, abb13, ultimo_ing.x) )
+
+names(df)[15] <- "CARTA.DI.CREDITO"
+names(df)[17] <- "NESSUN.PAGAMENTO"
+names(df)[20] <- "CRAL.ORO.ASSOCIAZ"
+names(df)[21] <- "MUS.TEATR.EDICOL" 
+names(df)[22] <- "OFFERTE.GRUPPI"
+names(df)[23] <- "PUNTO.INFORMATIVO.COMMERCIALE.NAN"
+
+df$compagnia <- as.factor(df$compagnia)
+df$Arte <- as.factor(df$Arte)
+df$Non.appassionato <- as.factor(df$Non.appassionato)
+df$Parco <- as.factor(df$Parco)
+df$Scienze <- as.factor(df$Scienze)
+df$Sport <- as.factor(df$Sport)
+df$Storia <- as.factor(df$Storia)
+df$nuovo_abb <- as.factor(df$nuovo_abb)
+df$femmina <- as.factor(df$femmina)
+df$BANCOMAT <- as.factor(df$BANCOMAT)
+df$CARTA.DI.CREDITO <- as.factor(df$CARTA.DI.CREDITO)
+df$CONTANTI <- as.factor(df$CONTANTI)
+df$NESSUN.PAGAMENTO <- as.factor(df$NESSUN.PAGAMENTO)
+df$PI <- as.factor(df$PI)
+df$TO <- as.factor(df$TO)
+df$CRAL.ORO.ASSOCIAZ <- as.factor(df$CRAL.ORO.ASSOCIAZ)
+df$MUS.TEATR.EDICOL <- as.factor(df$MUS.TEATR.EDICOL)
+df$OFFERTE.GRUPPI <- as.factor(df$OFFERTE.GRUPPI)
+df$PUNTO.INFORMATIVO.COMMERCIALE.NAN <- as.factor(df$PUNTO.INFORMATIVO.COMMERCIALE.NAN)
+df$si2014 <- as.factor(df$si2014)
+```
+
+
+```{r}
+# Remove the outliers in frequenza, variety ed age.
+# First, those in "age" because there were values < 0 and < 105.
+# Then, "frequenza" (values > 100) that consequently fixed "variety" too.
+
+df <- subset(df, df$age > 0)
+df <- subset(df, df$age < 105)
+df <- subset(df, df$frequenza < 100)
+
+head(df)
+dim(df)
+```
+
+# 2. Correlation assessment
+```{r, message = FALSE}
+# Assessment of the correlation between features
+
+
+num.var.df<- select(df, "frequenza", "variety", "importo", "age", "day_y_purchase", "span.utilizzo")
+
+to.corr <- round(cor(num.var.df),3)
+melted_corr <- melt(to.corr)
+ggplot(data = melted_corr, aes(x = Var1, y = Var2, fill = value)) + geom_tile() + scale_fill_viridis_c(option = "magma")
+
+```
+
+
+# 3. SMOTE & Train-Test Split
+```{r}
+# Solve the problem of unbalanced sampling problem with SMOTE (creating new instances through KNN, with a ratio of new instances of 150% for the minority class) performing oversampling (perc.over = 150%)
+
+t1 <- Sys.time()
+newdf <- SMOTE(form = si2014~., data = df, perc.over = 150, perc.under = 150)
+newdf <- as.data.frame(newdf)
+
+t2 <- Sys.time()
+t2-t1
+dim(newdf)
+
+ggplot(newdf, aes(x = si2014)) + geom_bar(aes(y = (..count..)/sum(..count..)), fill = "#8196D2") + scale_y_continuous(labels = scales::percent) + theme_classic()
+```
+
+
+```{r}
+# Train and test split (70% train)
+set.seed(101)
+split.df <- sample(seq_len(nrow(newdf)), size = 0.7*nrow(newdf))
+train.df <- newdf[split.df, ]
+test.df <- newdf[- split.df, ]
+
+dim(train.df)
+dim(test.df)
+```
+
+# MODEL DEPLOYMENT
+To tackle the churn problem, we've deployed, tuned and compared four models, that are:
+
+1. Logit
+  + To use its performance as a benchmark with the other models, considering that `logit` is the basic classifier
+  + To have a glimpse on the most important variable for this model
+2. Boosted Logistic regression
+3. Boosted Tree
+4. Flexible Discriminant Analysis
+5. Bagged Tree
+
+## MODEL 1. Logistic regression
+```{r}
+glm.model <- glm(si2014 ~ ., data = train.df, family = binomial(link = "logit"))
+glm.prob <- predict(glm.model, newdata = test.df, type = "response")
+
+summary(glm.model)
+```
+
+
+```{r}
+#COMPUTE SCORES OF THE LOGIT (accuracy, ...)
+glm.pred <- ifelse(glm.prob > 0.5, 1, 0)
+table(test.df$si2014, glm.pred)
+```
+
+
+## MODEL 2. Boosted Logistic regression
+We've added this model to see whether the logit (that is a weak learner), when combined with `boosting`, increased its performance. Boosting implies that a weak learner learns in an adaptive and sequential way. In this model we've iterated this process (`nIter`) $20$ times. Furthermore, the model is validated with `3-fold Cross Validation`; 3 is chosen as a trade-off between time and effectiveness.
+
+```{r}
+library(caTools)
+
+logreg_tune <- data.frame(nIter = seq(1,20, by = 1))
+t1 <- Sys.time()
+logreg_mod <- train(si2014 ~., data = train.df, method = "LogitBoost", tuneGrid = logreg_tune,
+                trControl = trainControl(method = "cv", number = 3, allowParallel = TRUE))
+t2 <- Sys.time()
+t2-t1
+logreg_mod
+```
+Then, for every iteration the accuracy is plotted below. We can see how there is a slight trend toward the upper-right corner, nonetheless the accuracy metric is highly fluctuating.
+```{r}
+ggplot(logreg_mod) +
+  geom_line(color = "#8196D2") + geom_point(color = "#8196D2") + theme_classic() 
+```
+
+
+```{r}
+logreg.pred <- predict(logreg_mod, test.df)
+logreg.prob <- predict(logreg_mod, newdata = test.df, type = "prob")
+confusionMatrix(data = logreg.pred, reference = test.df$si2014)
+```
+With this model we've achieved a $92%$ accuracy, with encouraging results both for Sensitivity ($95%$) and Specificity ($85%$).
+
+## MODEL 3. Boosted Classification Tree
+Again, we wanted to pursue better results by combining learners with ensemble methods. For what concerns the hyperparameters' tuning, we considered the number of Boosting iterations (`iter`, that by default is 50), the maximum depth of the tree (`maxdepth`) and the shrinkage parameter for boosting (`nu`, default value is 1)
+
+```{r, message = FALSE}
+library(ada)
+
+bctree_tune <- data.frame(iter = seq(10, 100, by = 10),
+                          maxdepth = seq(1, 10, by = 1),
+                          nu = seq(0.1, 1, by = 0.1) )
+
+t1 <- Sys.time()
+bctree_mod <- train(si2014 ~., data = train.df, method = "ada", tuneGrid = bctree_tune,
+                trControl = trainControl(method = "cv", number = 3, allowParallel = TRUE))
+t2 <- Sys.time()
+t2-t1
+
+bctree_mod
+```
+
+Then, for each iteration of the `Grid Search with 3-fold CV`, as tree max depth, $nu$ and number of trees changed, the accuracy is shown in the following graph.
+```{r}
+plot(bctree_mod)
+```
+
+
+```{r}
+bctree.pred <- predict(bctree_mod, test.df)
+bctree.prob <- predict(bctree_mod, newdata = test.df, type = "prob")
+confusionMatrix(data = bctree.pred, reference = test.df$si2014)
+```
+With this model we've achieved a $81%$ accuracy, with encouraging results both for Sensitivity ($82%$) and Specificity ($79%$). Overall, the BCT showed slightly poorer performance than the previous model.
+
+## MODEL 4. Flexible Discriminant Analysis
+
+The FDA is a complex model for classification that exploits several learners (linear regressions), that uses optimization algorithms to improve _linear separation_, and finally _MARS_ (Multivariate Adaptive Regression Splines) to generate the best hyperplane.
+
+The model's hyperparamters that have been tuned are
+
+* `degree`: refers to $Friedsman's mi$, which by default is 1.
+* `nprune`: the maximum number of terms, including the intercept. By default it's `NULL`, but to reduce computational effort we've set an lower bound to 16, and the upper comes from the `train.df` dimension
+
+```{r, message = FALSE, warning = FALSE}
+library(mda)
+library(earth)
+
+fda_tune <- data.frame(degree = seq(1,10, by = 1),
+                       nprune = seq(16,25, by = 1))
+
+t1 <- Sys.time()
+fda_mod <- train(si2014 ~., data = train.df, method = "fda", tuneGrid = fda_tune,
+                 trControl = trainControl(method = "cv", number = 3, allowParallel = TRUE))
+t2 <- Sys.time()
+
+t2-t1
+
+fda_mod
+```
+
+Then, for each iteration of the `Grid Search with 3-fold CV`, as the degree and nprune chaged, the accuracy is shown in the following graph.
+```{r}
+plot(fda_mod)
+```
+
+
+```{r}
+fda.pred <- predict(fda_mod, test.df)
+fda.prob <- predict(fda_mod, newdata = test.df, type = "prob")
+confusionMatrix(data = fda.pred, reference = test.df$si2014)
+```
+With this model we've achieved an $78%$ accuracy, and also Sensitivity ($80%$) and Specificity ($75%$) outline a fair performance. Overall, the FDA did not performed better than the previous models in any of the relevant metrics.
+
+
+## MODEL 5. Bootstrap Aggregating Recursive Partitioning Tree
+As our fifth and last model, we wanted to try with another ensemble method, that is Bagging. In this case, we did not perform any model tuning in order to see how well a bagged tree alone could perform against the previous tree model.
+```{r}
+library(ipred)
+
+t1 <- Sys.time()
+bag_mod <- bagging(si2014 ~ ., data = train.df)
+
+t2 <- Sys.time()
+t2-t1
+
+bag_mod
+```
+
+
+```{r}
+bag.pred <- predict(bag_mod, test.df)
+bag.prob <- predict(bag_mod, newdata = test.df, type = "prob")
+confusionMatrix(data = bag.pred, reference = test.df$si2014)
+```
+With this model we've achieved an $83%$ accuracy, and also Sensitivity ($~84%$) and Specificity ($82%$) outline a pretty good performance. In the end, the `Bagged Tree` outperformed the `BCT` for what concerns Specificity ($+3%$), while the other metrics are at the same level.
+
+
+# MODEL EVALUATION
+
+## ROC curves
+```{r}
+#0) create an ROCR prediction object from glm() probabilities
+x.glm.prob.rocr <- prediction(glm.prob, test.df['si2014'])
+# prepare an ROCR performance object for ROC curve 
+#(tpr=true positive rate, fpr=false positive rate)
+x.glm.perf <- performance(x.glm.prob.rocr, "tpr","fpr")
+plot(x.glm.perf, col = "#F3B584", main = "ROC curves for 5 models", lwd = 3)
+# ---------------------------------------------------------------------
+logreg_mod.prob.rocr <- prediction(logreg.prob$`1`, test.df['si2014'])
+logreg_mod.perf <- performance(logreg_mod.prob.rocr, "tpr","fpr")
+plot(logreg_mod.perf, col = "#F66D7A", add = TRUE, lwd = 3)
+# ---------------------------------------------------------------------
+bctree_mod.prob.rocr <- prediction(bctree.prob$`1`, test.df['si2014'])
+bctree_mod.perf <- performance(bctree_mod.prob.rocr, "tpr","fpr")
+plot(bctree_mod.perf, col = "#D44292", add = TRUE, lwd = 3)
+# ---------------------------------------------------------------------
+fda_mod.prob.rocr <- prediction(fda.prob$`1`, test.df['si2014'])
+fda_mod.perf <- performance(fda_mod.prob.rocr, "tpr","fpr")
+plot(fda_mod.perf, col = "#952EA0", add = TRUE, lwd = 3)
+# ---------------------------------------------------------------------
+bag_mod.prob.rocr <- prediction(bag.prob[,2], test.df['si2014'])
+bag_mod.perf <- performance(bag_mod.prob.rocr, "tpr","fpr")
+plot(bag_mod.perf, col = "#4B2991", add = TRUE, lwd = 3)
+
+lines(c(0,1), c(0,1), lwd = 2, lty = "dashed")
+
+legend("bottomright", legend = c("Logit", "Boosted Logit", "Boosted Tree", "FDA", "Bagged Tree"),
+       col = c("#F3B584", "#F66D7A", "#D44292", "#952EA0","#4B2991"),
+       cex = .8, lty = 1:2)
+```
+
+
+## LIFT curves
+```{r}
+lift1 <- performance(x.glm.prob.rocr,"lift", "rpp") #rate of positive prediction
+plot(lift1, main = "LIFT curves for 5 models", lwd = 2.5, col = "#F3B584")
+# ------------------------------------------------------
+lift2 <- performance(logreg_mod.prob.rocr,"lift", "rpp")
+plot(lift2, add = TRUE, lwd = 2.5, col = "#F66D7A")
+# ------------------------------------------------------
+lift3 <- performance(bctree_mod.prob.rocr,"lift", "rpp")
+plot(lift3, add = TRUE, lwd = 2.5, col = "#D44292")
+# ------------------------------------------------------
+lift4 <- performance(fda_mod.prob.rocr,"lift", "rpp")
+plot(lift4, add = TRUE, lwd = 2.5, col = "#952EA0")
+# ------------------------------------------------------
+lift5 <- performance(bag_mod.prob.rocr,"lift", "rpp")
+plot(lift5, add = TRUE, lwd = 2.5, col = "#4B2991")
+
+abline(h = 1)
+
+legend("topright", legend = c("Logit", "Boosted Logit", "Boosted Tree", "FDA", "Bagged Tree"),
+       col = c("#F3B584", "#F66D7A", "#D44292", "#952EA0","#4B2991"),
+       cex = .8, lty = 1:2)
+```
+
+
+
+## GAIN curves
+```{r}
+gain1 <- performance(x.glm.prob.rocr,"tpr","rpp")
+plot(gain1, col = "#F3B584", main="GAIN CHART for 5 models", lwd = 3)
+# ------------------------------------------------------
+gain2 <- performance(logreg_mod.prob.rocr,"tpr","rpp")
+plot(gain2, col = "#F66D7A", add = TRUE, lwd = 3)
+# ------------------------------------------------------
+gain3 <- performance(bctree_mod.prob.rocr,"tpr","rpp")
+plot(gain3, col = "#D44292", add = TRUE, lwd = 3)
+# ------------------------------------------------------
+gain4 <- performance(fda_mod.prob.rocr,"tpr","rpp")
+plot(gain4, col = "#952EA0", add = TRUE, lwd = 3)
+# ------------------------------------------------------
+gain5 <- performance(bag_mod.prob.rocr,"tpr","rpp")
+plot(gain5, col = "#4B2991", add = TRUE, lwd = 3)
+
+abline(v=0.2, par(lty = "dashed"))
+
+legend("bottomright", legend = c("Logit", "Boosted Logit", "Boosted Tree", "FDA", "Bagged Tree"),
+       col = c("#F3B584", "#F66D7A", "#D44292", "#952EA0","#4B2991"),
+       cex = .8, lty = 1:2)
+```
+
+
+
+
