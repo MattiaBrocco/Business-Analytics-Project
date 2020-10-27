@@ -13,11 +13,11 @@ library(caret)
 library(dplyr)
 library(mosaic)
 library(ggplot2)
+library(lattice)
 library(viridis)
 library(reshape2)
 library(imbalance)
 library(tidyverse)
-library(ggcorrplot)
 ```
 
 
@@ -87,15 +87,15 @@ densityplot(~as.numeric(age), data = df, groups = femmina,
             plot.point = FALSE, lwd = 3, na.rm = TRUE,
             main = "Age density plot broken down by sex", auto.key = TRUE)
 
-# Age density plot broken down by lonely entrances
+# Age density plot broken down by entrances in groups
 densityplot(~as.numeric(age), data = df, groups = compagnia,
-            na.rm = TRUE, main = "Age density plot broken down by lonely entrances",
+            na.rm = TRUE, main = "Age density plot broken down by entrances in groups",
             auto.key = T, plot.point = FALSE, lwd = 3,
             par.settings = list(superpose.line = list(col = c("#4B2991","#D44292") )) )
 
-# Age density plot broken down by churn
+# Age density plot broken down by renewal
 densityplot(~as.numeric(age), data = df, groups = si2014, plot.point = FALSE, lwd = 3,
-            na.rm = TRUE, main = "Age density plot broken down by churn", auto.key = T,
+            na.rm = TRUE, main = "Age density plot broken down by renewal", auto.key = T,
             par.settings = list(superpose.line = list(col = c("#4B2991","#D44292") )) )
 ```
 
@@ -114,7 +114,6 @@ to.corr <- round(cor(num.var.df),3)
 melted_corr <- melt(to.corr)
 ggplot(data = melted_corr, aes(x = Var1, y = Var2, fill = value)) + geom_tile() + scale_fill_viridis_c(option = "magma") + labs(title = "Dataframe's Correlation Matrix", subtitle = "Only numeric variables included", fill = "Pearson's\nCorrelation") +
 scale_x_discrete(expand = c(0,0)) + scale_y_discrete(expand = c(0,0))
-
 ```
 
 
@@ -193,9 +192,25 @@ summary(glm.model)
 ```{r}
 #COMPUTE SCORES OF THE LOGIT (accuracy, ...)
 glm.pred <- ifelse(glm.prob > 0.5, 1, 0)
-table(test.df$si2014, glm.pred)
+scores <- table(test.df$si2014, glm.pred)
+scores
 ```
 
+
+```{r}
+# According to the following models, whose metrics are compute by "caret", here TP are (0,0) and TN are (1,1)
+cat("Accuracy:",(scores[2,2]+scores[1,1])/sum(scores),"\n")
+cat("Precision:", scores[1,1]/(scores[1,1]+scores[2,1]),"\n")
+cat("Sensitivity:", scores[1,1]/(scores[1,1]+scores[1,2]),"\n")
+cat("Specificity:", scores[2,2]/(scores[2,2]+scores[2,1]),"\n")
+cat("1-Specificity:", scores[2,1]/(scores[2,1]+scores[2,2]))
+
+#cat("Accuracy:",(scores[2,2]+scores[1,1])/sum(scores),"\n")
+#cat("Sensitivity:", scores[2,2]/(scores[2,2]+scores[1,2]),"\n")
+#cat("Precision:", scores[2,2]/(scores[2,2]+scores[2,1]),"\n")
+#cat("Specificity:", scores[1,1]/(scores[1,1]+scores[2,1]),"\n")
+#cat("1-Specificity:", scores[2,1]/(scores[2,1]+scores[1,1]))
+```
 
 ## MODEL 2. Boosted Logistic regression
 We've added this model to see whether the logit (that is a weak learner), when combined with `boosting`, increased its performance. Boosting implies that a weak learner learns in an adaptive and sequential way. In this model we've iterated this process (`nIter`) $20$ times. Furthermore, the model is validated with `3-fold Cross Validation`; 3 is chosen as a trade-off between time and effectiveness.
@@ -211,7 +226,9 @@ t2 <- Sys.time()
 t2-t1
 logreg_mod
 ```
+
 Then, for every iteration the accuracy is plotted below. We can see how there is a slight trend toward the upper-right corner, nonetheless the accuracy metric is highly fluctuating.
+
 ```{r}
 ggplot(logreg_mod) +
   geom_line(color = "#8196D2") + geom_point(color = "#8196D2") + theme_classic() 
@@ -263,7 +280,7 @@ The FDA is a complex model for classification that exploits several learners (li
 
 The model's hyperparamters that have been tuned are
 
-* `degree`: refers to $Friedsman's mi$, which by default is 1.
+* `degree`: refers to $Friedman's mi$, which by default is 1.
 * `nprune`: the maximum number of terms, including the intercept. By default it's `NULL`, but to reduce computational effort we've set an lower bound to 7 ( $=10-(ncol(train.df)-1)$ ), and the upper comes from the `train.df` dimension
 
 ```{r, message = FALSE, warning = FALSE}
@@ -348,10 +365,10 @@ bag_mod.prob.rocr <- prediction(bag.prob[,2], test.df['si2014'])
 bag_mod.perf <- performance(bag_mod.prob.rocr, "tpr","fpr")
 plot(bag_mod.perf, col = "#4B2991", add = TRUE, lwd = 3)
 
-lines(c(0,1), c(0,1), lwd = 2, lty = "dashed")
+legend("bottomright", legend = c("Logit", "Boosted Logit", "Boosted Tree", "FDA", "Tree Bagging"),
+       col = c("#F3B584", "#F66D7A", "#D44292", "#952EA0","#4B2991"), cex = .8, lty = 1:1)
 
-legend("bottomright", legend = c("Logit", "Boosted Logit", "Boosted Tree", "FDA", "Bagged Tree"),
-       col = c("#F3B584", "#F66D7A", "#D44292", "#952EA0","#4B2991"), cex = .8, lty = 1:2)
+lines(c(0,1), c(0,1), lwd = 2, lty = "dashed")
 ```
 
 
@@ -374,8 +391,8 @@ plot(lift5, add = TRUE, lwd = 2.5, col = "#4B2991")
 
 abline(h = 1)
 
-legend("bottomright", legend = c("Logit", "Boosted Logit", "Boosted Tree", "FDA", "Bagged Tree"),
-       col = c("#F3B584", "#F66D7A", "#D44292", "#952EA0","#4B2991"), cex = .8, lty = 1:2)
+legend("bottomright", legend = c("Logit", "Boosted Logit", "Boosted Tree", "FDA", "Tree Bagging"),
+       col = c("#F3B584", "#F66D7A", "#D44292", "#952EA0","#4B2991"), cex = .8, lty = 1:1)
 ```
 
 ## GAIN curves
@@ -396,76 +413,86 @@ plot(gain4, col = "#952EA0", add = TRUE, lwd = 3)
 gain5 <- performance(bag_mod.prob.rocr,"tpr","rpp")
 plot(gain5, col = "#4B2991", add = TRUE, lwd = 3)
 
+legend("bottomright", legend = c("Logit", "Boosted Logit", "Boosted Tree", "FDA", "Tree Bagging"),
+       col = c("#F3B584", "#F66D7A", "#D44292", "#952EA0","#4B2991"), cex = .8, lty = 1:1)
+
 abline(v = 5000/nrow(test.df), par(lty = "dashed"))
-
-legend("bottomright", legend = c("Logit", "Boosted Logit", "Boosted Tree", "FDA", "Bagged Tree"),
-       col = c("#F3B584", "#F66D7A", "#D44292", "#952EA0","#4B2991"), cex = .8, lty = 1:2)
 ```
-## PROFIT curves
-COST/BENEFIT MATRIX????
 
+## PROFIT curves
+
+Profit is defined as $Profit = Revenues-Costs$, where $Revenues = Card Price$ and $Costs = 1 + (1/2)*import_tot$. Indeed, revenues coincide with the price paid by customers, while costs with the administrative cost of the phone call, plus half of the amount of money each customer has spent for visiting museums (by definition of this business model).
+This implies that an increase in the total amount spent by a customer, results in a massive decrease in the profit from that customer.
 
 ```{r}
-# compute profit as revenues-costs / order the column by score / cumsum of the profit
-
-# per ogni customer:
-# REV: prezzo_card base
-# COST: 1$
-
 #1)Logit
 newdata1 <- test.df
 newdata1$glm.prob <- glm.prob
-newdata1$profit <- (newdata1$glm.prob*(28-1)) - 1
+newdata1$profit <- (newdata1$glm.prob*newdata1$prezzo_card) - (1+(newdata1$importo_tot*(0.5))) 
 newdata1 <- newdata1[order(-newdata1$glm.prob),]
 newdata1$cumprof <- cumsum(newdata1$profit)
-plot(newdata1$cumprof, col = "#F3B584", ylim = c(-100,2.5e5), xlab = "nr instances",
+plot(newdata1$cumprof, col = "#F3B584", xlab = "nr instances", lwd = 3, ylim = c(-3e5,1.5e5),
      ylab = "Cumulative profit", main = "PROFIT CURVES for 5 models")
 #2)Boosted Logit
 newdata2 <- test.df
 newdata2$logreg.prob <- logreg.prob[,2]
-newdata2$profit <- (newdata2$logreg.prob*(28-1)) - 1
+newdata2$profit <- (newdata2$logreg.prob*newdata2$prezzo_card) - (1+(newdata2$importo_tot*(0.5))) 
 newdata2 <- newdata2[order(-newdata2$logreg.prob),]
 newdata2$cumprof <- cumsum(newdata2$profit)
 lines(newdata2$cumprof, col = "#F66D7A", lwd = 3)
 #3)Boosted Tree
 newdata3 <- test.df
 newdata3$bctree.prob <- bctree.prob[,2]
-newdata3$profit <- (newdata3$bctree.prob*(28-1)) - 1
+newdata3$profit <- (newdata3$bctree.prob*newdata3$prezzo_card) - (1+(newdata3$importo_tot*(0.5))) 
 newdata3 <- newdata3[order(-newdata3$bctree.prob),]
 newdata3$cumprof <- cumsum(newdata3$profit)
 lines(newdata3$cumprof, col = "#D44292", lwd = 3)
 #4)FDA
 newdata4 <- test.df
 newdata4$fda.prob <- fda.prob[,2]
-newdata4$profit <- (newdata4$fda.prob*(28-1)) - 1
+newdata4$profit <- (newdata4$fda.prob*newdata4$prezzo_card) - (1+(newdata4$importo_tot*(0.5))) 
 newdata4 <- newdata4[order(-newdata4$fda.prob),]
 newdata4$cumprof <- cumsum(newdata4$profit)
 lines(newdata4$cumprof, col = "#952EA0", lwd = 3)
 #5) Bagged Tree
 newdata5 <- test.df
 newdata5$bagg.prob <- bag.prob[,2]
-newdata5$profit <- (newdata5$bagg.prob*(28-1)) - 1
+newdata5$profit <- (newdata5$bagg.prob*newdata5$prezzo_card) - (1+(newdata5$importo_tot*(0.5))) 
 newdata5 <- newdata5[order(-newdata5$bagg.prob),]
 newdata5$cumprof <- cumsum(newdata5$profit)
 lines(newdata5$cumprof, col = "#4B2991", lwd = 3)
 
-abline(h = 0, par(lty = "dashed"))
-abline(v = 5000, par(lty = "dashed"))
+#abline(v = 5000, par(lty = "dashed"))
 
-legend("bottomright", legend = c("Logit", "Boosted Logit", "Boosted Tree", "FDA", "Bagged Tree"),
-       col = c("#F3B584", "#F66D7A", "#D44292", "#952EA0","#4B2991"), cex = .8, lty = 1:2)
+legend("bottomleft", legend = c("Logit", "Boosted Logit", "Boosted Tree", "FDA", "Tree Bagging"),
+       col = c("#F3B584", "#F66D7A", "#D44292", "#952EA0","#4B2991"), cex = .8, lty = 1:1)
+
+abline(a = 0, b = (-3e+05/20000), lty = "dashed", lwd = 2)
+```
+
+The most profitable model is _Boosted Tree_. Which is a revolution for us, since according to mere performance the best model was the _Bagging RTree_, nonetheless what really matters to the business is the financial side.
+
+# THE 5000 HEADS TO CALL
+```{r}
+# SELECTING ONLY THE LAST 5000 ROWS OF THE DATAFRAME CONTAINING ONLY POSITIVE PROFITS, ORDERED BY SCORE.
+# THIS WAY WE CAN TARGET ONLY THOSE THAT ARE PROFITABLE, WHILE AT THE SAME TIME REDUCING THE WASTE OF CONTACTING CUSTOMERS THAT WILL (ALMOST) SURELY RENEW
+
+top5000 <- subset(newdata3, newdata3$profit > 0)[4287:9286,]
+top5000
 ```
 
 
+```{r}
+ggplot(top5000, aes(x = si2014)) + geom_bar(fill = "#8196D2") + theme_classic()
+```
 
+```{r}
+densityplot(top5000$profit, col = "#8196D2", lwd = 3)
+```
 
-
-
-
-
-
-
-
+```{r}
+favstats(top5000$profit)
+```
 
 
 
