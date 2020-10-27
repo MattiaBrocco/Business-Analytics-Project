@@ -281,7 +281,7 @@ The FDA is a complex model for classification that exploits several learners (li
 The model's hyperparamters that have been tuned are
 
 * `degree`: refers to $Friedman's mi$, which by default is 1.
-* `nprune`: the maximum number of terms, including the intercept. By default it's `NULL`, but to reduce computational effort we've set an lower bound to 7 ( $=10-(ncol(train.df)-1)$ ), and the upper comes from the `train.df` dimension
+* `nprune`: the maximum number of terms, including the intercept. By default it's `NULL`, but to reduce computational effort we've set an lower bound to 7 ( $=ncol(train.df)-10)$ ), and the upper comes from the `train.df` dimension
 
 ```{r, message = FALSE, warning = FALSE}
 library(mda)
