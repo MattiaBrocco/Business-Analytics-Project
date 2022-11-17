@@ -44,11 +44,16 @@ class cleaner:
         col = df["agenzia_tipo"]
         l = []
         for x in col:
-            if x in ["PUNTO INFORMATIVO","DATO MANCANTE","PUNTO COMMERCIALE"]: l += ["PUNTO INFORMATIVO/COMMERCIALE/NAN"]
-            elif x in ["MUSEO","TEATRI","EDICOLE"]: l += ["MUSEO/TEATRI/EDICOLE"]
-            elif x in ["OFFERTA SCUOLE","OFFERTA AZIENDA","GRUPPO D'ACQUISTO"]: l += ["OFFERTE/GRUPPI"]
-            elif x == "ACQUISTO ONLINE": l += ["ACQUISTO ONLINE"]
-            else: l += ["CRAL/TESSERE ORO/ASSOCIAZIONE"]
+            if x in ["PUNTO INFORMATIVO","DATO MANCANTE","PUNTO COMMERCIALE"]:
+                l += ["PUNTO INFORMATIVO/COMMERCIALE/NAN"]
+            elif x in ["MUSEO","TEATRI","EDICOLE"]:
+                l += ["MUSEO/TEATRI/EDICOLE"]
+            elif x in ["OFFERTA SCUOLE","OFFERTA AZIENDA","GRUPPO D'ACQUISTO"]:
+                l += ["OFFERTE/GRUPPI"]
+            elif x == "ACQUISTO ONLINE":
+                l += ["ACQUISTO ONLINE"]
+            else:
+                l += ["CRAL/TESSERE ORO/ASSOCIAZIONE"]
         return l
     
     
@@ -63,26 +68,27 @@ class cleaner:
         and convert it to category).
         """
         self.df = df
-        l = df["museo"].unique()
-        ldf = [df[df["museo"] == mus] for mus in l]
-
-        for data in ldf:
-            if len(data) > 1:
-                data.reset_index(drop = True, inplace = True)
-                data["min_delta"] = [float(x.total_seconds()/60) for x in data['timestamp'].diff(periods = 1)]
-                data["min_delta"][0] = data["min_delta"][1]
+        
+        newdata = []
+        for m in df["museo"].unique():
+            
+            subdata = df[df["museo"] == m].copy()
+            
+            if len(subdata) > 1:
+                subdata = subdata.reset_index(drop = True)
+                subdata["min_delta"] = [float(x.total_seconds()/60)
+                                        for x in subdata['timestamp'].diff(periods = 1)]
+                subdata.loc[0, "min_delta"] = subdata.loc[1, "min_delta"]
+                newdata += [subdata]
             else:
-                data["min_delta"] = 0
+                subdata["min_delta"] = 0
+                newdata += [subdata]
     
-        newdf = pd.concat(ldf)
-        newdf.reset_index(inplace = True, drop = True)
+        newdata = pd.concat(newdata, ignore_index = True)
     
-        less_than_2m = newdf.loc[(newdf["min_delta"] <= 2)]
-        more_than_2m = newdf.loc[(newdf["min_delta"] > 2)]
-        less_than_2m["min_delta"] = 1
-        more_than_2m["min_delta"] = 0
-        newdf = pd.concat([less_than_2m, more_than_2m])
-        newdf = newdf.sort_index()
-        newdf = newdf.rename(columns = {"min_delta":"compagnia"})
+        newdata.loc[newdata["min_delta"] <= 2, "min_delta"] = 1
+        newdata.loc[newdata["min_delta"] > 2, "min_delta"] = 0
+        
+        newdata = newdata.rename(columns = {"min_delta": "compagnia"})
     
-        return newdf
+        return newdata
